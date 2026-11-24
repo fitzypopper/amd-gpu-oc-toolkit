@@ -8,5 +8,6 @@ venv/
 .pytest_cache/
 .coverage
 
-# machine-specific notes (not part of the published repo)
+# machine-specific notes / local tuning scripts (not part of the published repo)
 NOTES.md
+*.local.sh
