@@ -128,9 +128,7 @@ class TestValidation(ProfileDirTest):
 class TestSudoProfileDir(unittest.TestCase):
     def test_sudo_uses_invoking_users_home(self):
         env = {"SUDO_USER": "fitzypopper", "HOME": "/root"}
-        for key in ("AMDOC_PROFILE_DIR", "XDG_CONFIG_HOME"):
-            env[key] = None  # patch.dict with None removes the key
-        with mock.patch.dict(os.environ, env), \
+        with mock.patch.dict(os.environ, env, clear=True), \
              mock.patch.object(profiles.pwd, "getpwnam",
                                return_value=SimpleNamespace(pw_dir="/home/fitzypopper")):
             self.assertEqual(
