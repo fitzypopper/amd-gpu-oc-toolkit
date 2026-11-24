@@ -99,7 +99,10 @@ def set_power_cap(gpu: Gpu, watts: float) -> None:
         )
     sysfs.write_value(path, str(int(round(watts * 1_000_000))))
     readback = sysfs.read_float(path)
-    if readback is not None and abs(readback / 1e6 - watts) > 0.5:
+    # The driver rounds power caps to its own granularity (e.g. writing 180 W
+    # on Navi 33 reads back as 179 W), so allow a small rounding margin while
+    # still catching genuine mismatches.
+    if readback is not None and abs(readback / 1e6 - watts) > 2.0:
         raise sysfs.SysfsError(
             f"power cap readback mismatch: wrote {watts:g} W, "
             f"driver reports {readback / 1e6:g} W"
