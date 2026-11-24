@@ -30,6 +30,10 @@ A stdlib-only Python CLI (`amdoc`) that overclocks/underclocks AMD GPUs via `amd
 - `pp_dpm_fan` accepts `manual` or `auto`; writing `manual` switches to user-controlled fan.
 - hwmon fan curve: `fan*_curve` with pairs `%`/`°C`; `auto_curve` is read-only.
 - `pp_dpm_sclk`/`pp_dpm_mclk` list states as `0: <MHz> *` — the `*` marks the active one.
+- Bootloader detection must prefer real systemd-boot artefacts (`/boot/loader/loader.conf`,
+  `/boot/EFI/Linux`) over `/etc/default/grub` — GRUB's template can be installed on a
+  systemd-boot machine. UKI kernel args live in `/etc/kernel/cmdline` and are baked in with
+  `mkinitcpio -P`; type-1 entries use `/boot/loader/entries/*.conf` `options` lines.
 
 ## Layout
 

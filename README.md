@@ -51,15 +51,18 @@ amdgpu only exposes `/sys/class/drm/cardX/device/pp_od_clk_voltage` when the
 $ amdoc doctor
   [warn] Overdrive      pp_od_clk_voltage not exposed — clock/voltage tuning locked
                         cause: PP_OVERDRIVE_MASK (0x4000) is not set in the current ppfeaturemask (0xfff7bfff)
-                        add  amdgpu.ppfeaturemask=0xfff7ffff  to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub
-                        run  sudo grub-mkconfig -o /boot/grub/grub.cfg
+                        add  amdgpu.ppfeaturemask=0xfff7ffff  to /etc/kernel/cmdline
+                        run  sudo mkinitcpio -P  (rebuild the unified kernel image)
                         reboot, then re-check with: amdoc doctor
                         note: once overdrive is enabled the kernel may report an 'out of spec' taint — expected behaviour, not an error
 ```
 
 `amdoc doctor` computes the corrected mask from your *current* one (ORs in
-`0x4000`), detects GRUB vs systemd-boot, and prints copy-pasteable steps. If the
-node is still missing after a reboot with the overdrive bit set, the GPU
+`0x4000`), detects the **active** bootloader (systemd-boot with a unified kernel
+image, systemd-boot type-1 entries, or GRUB) and prints copy-pasteable steps.
+It checks for real systemd-boot artefacts before `/etc/default/grub`, because
+GRUB's config template is often installed on systemd-boot systems. If the node
+is still missing after a reboot with the overdrive bit set, the GPU
 vBIOS/firmware does not expose overclocking for that board — nothing software
 can do; fan control, power limit and monitoring keep working.
 
@@ -71,11 +74,15 @@ third-party packages).
 ```sh
 # from a clone of this repo:
 pipx install .            # recommended: isolated CLI tool
-# or, if you use pip with --user support:
+# or, if your distro allows pip --user installs:
 python -m pip install --user .
-# or run straight from the source tree:
+# or run straight from the source tree (works everywhere):
 PYTHONPATH=src python -m amdoc status
 ```
+
+On externally-managed distros such as Arch, `pip install --user` is refused by
+PEP 668 — install `python-pipx` with your package manager, or use the
+run-from-source form.
 
 Writes to sysfs need root, so most tuning commands are run with `sudo amdoc ...`.
 `amdoc` tells you when that's needed — it never escalates on its own.

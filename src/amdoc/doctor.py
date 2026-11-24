@@ -26,25 +26,43 @@ def _read_ppfeaturemask() -> int | None:
 
 
 def _bootloader_steps(new_mask: str) -> list[str]:
-    if os.path.exists("/etc/default/grub"):
+    """Give fix steps for the *active* bootloader.
+
+    Many systems have /etc/default/grub installed even though they boot with
+    systemd-boot, so check for actual systemd-boot artefacts first.
+    """
+    arg = f"amdgpu.ppfeaturemask={new_mask}"
+    reboot = "reboot, then re-check with: amdoc doctor"
+
+    systemd_boot = os.path.exists("/boot/loader/loader.conf") or os.path.isdir(
+        "/boot/EFI/Linux"
+    )
+    if systemd_boot:
+        # Unified kernel image: the command line lives in /etc/kernel/cmdline
+        # and is baked into the .efi by mkinitcpio/ukify.
+        if os.path.exists("/etc/kernel/cmdline"):
+            steps = [f"add  {arg}  to /etc/kernel/cmdline"]
+            if glob.glob("/etc/mkinitcpio.d/*.preset"):
+                steps.append("run  sudo mkinitcpio -P  (rebuild the unified kernel image)")
+            else:
+                steps.append("rebuild your UKI with the new command line (e.g. sudo ukify build)")
+            return steps + [reboot]
+        entries = sorted(glob.glob("/boot/loader/entries/*.conf"))
+        if entries:
+            names = ", ".join(os.path.basename(p) for p in entries)
+            return [
+                f"add  {arg}  to the 'options' line of your systemd-boot entry ({names})",
+                reboot,
+            ]
+        return [f"add  {arg}  to your systemd-boot kernel command line", reboot]
+
+    if os.path.exists("/boot/grub/grub.cfg") or os.path.exists("/etc/default/grub"):
         return [
-            f"add  amdgpu.ppfeaturemask={new_mask}  to GRUB_CMDLINE_LINUX_DEFAULT "
-            "in /etc/default/grub",
+            f"add  {arg}  to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub",
             "run  sudo grub-mkconfig -o /boot/grub/grub.cfg",
-            "reboot, then re-check with: amdoc doctor",
+            reboot,
         ]
-    if glob.glob("/boot/loader/entries/*.conf"):
-        entries = ", ".join(os.path.basename(p) for p in sorted(glob.glob("/boot/loader/entries/*.conf")))
-        return [
-            f"add  amdgpu.ppfeaturemask={new_mask}  to the kernel command line "
-            f"of your systemd-boot entry ({entries})",
-            "reboot, then re-check with: amdoc doctor",
-        ]
-    return [
-        f"add  amdgpu.ppfeaturemask={new_mask}  to your bootloader's kernel "
-        "command line",
-        "reboot, then re-check with: amdoc doctor",
-    ]
+    return [f"add  {arg}  to your bootloader's kernel command line", reboot]
 
 
 def _kernel_log_check() -> tuple[str, str]:
