@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import re
 import time
 from pathlib import Path
@@ -24,7 +25,17 @@ def profiles_dir() -> Path:
     override = os.environ.get("AMDOC_PROFILE_DIR")
     if override:
         return Path(override)
-    xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    # Writes normally run under sudo, where HOME is /root. Use the invoking
+    # user's home so `sudo amdoc profile apply NAME` sees profiles saved as
+    # that user.
+    home = Path.home()
+    sudo_user = os.environ.get("SUDO_USER")
+    if sudo_user and sudo_user != "root":
+        try:
+            home = Path(pwd.getpwnam(sudo_user).pw_dir)
+        except (KeyError, OSError):
+            pass
+    xdg = os.environ.get("XDG_CONFIG_HOME") or str(home / ".config")
     return Path(xdg) / "amd-gpu-oc" / "profiles"
 
 

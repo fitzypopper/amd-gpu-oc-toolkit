@@ -6,6 +6,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from amdoc import profiles
 from amdoc.gpu import Gpu
@@ -120,6 +123,27 @@ class TestValidation(ProfileDirTest):
     def test_non_numeric_power_rejected(self):
         errors = profiles.validate(self._profile(power_cap_w="lots"), dummy_gpu())
         self.assertTrue(any("power" in e for e in errors))
+
+
+class TestSudoProfileDir(unittest.TestCase):
+    def test_sudo_uses_invoking_users_home(self):
+        env = {"SUDO_USER": "fitzypopper", "HOME": "/root"}
+        for key in ("AMDOC_PROFILE_DIR", "XDG_CONFIG_HOME"):
+            env[key] = None  # patch.dict with None removes the key
+        with mock.patch.dict(os.environ, env), \
+             mock.patch.object(profiles.pwd, "getpwnam",
+                               return_value=SimpleNamespace(pw_dir="/home/fitzypopper")):
+            self.assertEqual(
+                profiles.profiles_dir(),
+                Path("/home/fitzypopper/.config/amd-gpu-oc/profiles"),
+            )
+
+    def test_explicit_override_still_wins(self):
+        with mock.patch.dict(os.environ, {
+            "AMDOC_PROFILE_DIR": "/tmp/custom-profiles",
+            "SUDO_USER": "fitzypopper",
+        }):
+            self.assertEqual(profiles.profiles_dir(), Path("/tmp/custom-profiles"))
 
 
 if __name__ == "__main__":
