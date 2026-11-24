@@ -474,6 +474,23 @@ def cmd_profile(args) -> int:
         print(f"profile '{args.name}' removed")
         return 0
 
+    if action == "autostart":
+        if args.disable:
+            profiles.autostart_disable()
+            print("boot autostart disabled and unit removed")
+            return 0
+        if args.name:
+            path = profiles.autostart_install(args.name)
+            print(f"boot autostart enabled for profile '{args.name}' ({path})")
+            print("test it with: sudo systemctl start amdoc-oc.service")
+            return 0
+        status = profiles.autostart_status()
+        print(f"installed: {status['installed']}")
+        print(f"profile:   {status['profile']}")
+        print(f"enabled:   {status['enabled']}")
+        print(f"active:    {status['active']}")
+        return 0
+
     raise SysfsError(f"unknown profile action '{action}'")
 
 
@@ -624,6 +641,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("name")
     p_rm = prof_sub.add_parser("rm", help="delete a profile")
     p_rm.add_argument("name")
+    p_auto = prof_sub.add_parser("autostart", help="apply a profile at boot via systemd")
+    p_auto.add_argument("name", nargs="?", help="profile to apply at boot")
+    p_auto.add_argument("--disable", action="store_true",
+                        help="disable and remove the boot unit")
     p_prof.set_defaults(handler=cmd_profile)
 
     p_reset = sub.add_parser("reset", help="restore stock behaviour")

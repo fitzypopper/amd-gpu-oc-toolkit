@@ -132,6 +132,8 @@ commands:
   profile save NAME      capture current settings [--curve SPEC]
   profile apply NAME     apply a profile [--dry-run]
   profile list|show|rm
+  profile autostart [NAME]   apply NAME at boot (systemd unit; --disable to remove)
+  profile autostart         show installed/enabled/active status
   reset [--what ...]     od,fan,power,dpm (default: all)
   doctor                 diagnostics with exact remediation steps
 ```
@@ -165,6 +167,22 @@ Profiles are plain JSON in `~/.config/amd-gpu-oc/profiles/` (override with
 `amdoc profile apply` validates everything against the firmware ranges *before*
 touching the system, and reports anything it skips (e.g. clock settings when
 overdrive is unavailable).
+
+### Boot persistence
+
+Sysfs tuning is volatile — it resets on reboot. To reapply a saved profile at
+every boot, install a systemd one-shot unit (needs root):
+
+```sh
+sudo amdoc profile autostart gaming     # enable + start now
+amdoc profile autostart                 # check status
+sudo amdoc profile autostart --disable  # remove it
+```
+
+The unit stores absolute paths to this source tree and to your profiles, so
+moving either one requires reinstalling the autostart unit. Fan curves started
+with `amdoc fan curve` are not persisted — store the curve in a profile and
+start it separately if needed.
 
 ## Safety
 

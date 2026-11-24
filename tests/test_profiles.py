@@ -125,6 +125,39 @@ class TestValidation(ProfileDirTest):
         self.assertTrue(any("power" in e for e in errors))
 
 
+class TestAutostart(ProfileDirTest):
+    def _write_profile(self, name="gaming"):
+        path = profiles.profiles_dir() / f"{name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"name": name, "version": 1}))
+        return path
+
+    def test_unit_renders_profile_and_env(self):
+        self._write_profile()
+        with mock.patch.object(profiles, "__file__", "/tmp/fake/src/amdoc/profiles.py"), \
+             mock.patch.object(profiles.sys, "executable", "/usr/bin/python3"):
+            unit = profiles.autostart_unit("gaming")
+        self.assertIn("Description=Apply AMD GPU OC profile gaming (amdoc)", unit)
+        self.assertIn('Environment="PYTHONPATH=/tmp/fake/src"', unit)
+        self.assertIn(f'Environment="AMDOC_PROFILE_DIR={self.tmp.name}"', unit)
+        self.assertIn('ExecStart="/usr/bin/python3" -m amdoc profile apply gaming', unit)
+        self.assertIn("WantedBy=multi-user.target", unit)
+
+    def test_unknown_profile_rejected(self):
+        with self.assertRaises(profiles.ProfileError):
+            profiles.autostart_unit("missing")
+
+    def test_invalid_profile_name_rejected(self):
+        with self.assertRaises(profiles.ProfileError):
+            profiles.autostart_unit("../evil")
+
+    def test_disable_without_unit_is_noop(self):
+        with mock.patch.object(profiles, "SERVICE_PATH", Path(self.tmp.name) / "absent.service"), \
+             mock.patch.object(profiles, "_systemctl") as ctl:
+            profiles.autostart_disable()
+            ctl.assert_not_called()
+
+
 class TestSudoProfileDir(unittest.TestCase):
     def test_sudo_uses_invoking_users_home(self):
         env = {"SUDO_USER": "fitzypopper", "HOME": "/root"}

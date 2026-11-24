@@ -6,6 +6,8 @@ import json
 import os
 import pwd
 import re
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -267,3 +269,86 @@ def apply(gpu: Gpu, name: str, dry_run: bool = False) -> list[str]:
         )
 
     return actions
+
+
+# --------------------------------------------------------------------------
+# Boot persistence via a systemd one-shot unit
+# --------------------------------------------------------------------------
+SERVICE_NAME = "amdoc-oc.service"
+SERVICE_PATH = Path("/etc/systemd/system") / SERVICE_NAME
+
+
+def _systemctl(*args: str, check: bool = True) -> str:
+    try:
+        proc = subprocess.run(
+            ["systemctl", *args], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ProfileError(f"could not run systemctl {args[0]}: {exc}") from exc
+    if check and proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip() or f"exit {proc.returncode}"
+        raise ProfileError(f"systemctl {args[0]} failed: {detail}")
+    return proc.stdout.strip()
+
+
+def autostart_unit(name: str) -> str:
+    """Render the systemd unit that applies ``name`` at boot."""
+    _profile_path(name)  # validate the name
+    load(name)  # fail early if the profile is missing
+    src = Path(__file__).resolve().parent.parent
+    return (
+        "[Unit]\n"
+        f"Description=Apply AMD GPU OC profile {name} (amdoc)\n"
+        "After=systemd-modules-load.service\n"
+        "\n"
+        "[Service]\n"
+        "Type=oneshot\n"
+        f'Environment="PYTHONPATH={src}"\n'
+        f'Environment="AMDOC_PROFILE_DIR={profiles_dir()}"\n'
+        f'ExecStart="{Path(sys.executable)}" -m amdoc profile apply {name}\n'
+        "TimeoutStartSec=60\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=multi-user.target\n"
+    )
+
+
+def autostart_install(name: str) -> Path:
+    unit = autostart_unit(name)
+    try:
+        SERVICE_PATH.write_text(unit)
+    except PermissionError as exc:
+        raise ProfileError(
+            f"permission denied writing {SERVICE_PATH} — re-run with sudo"
+        ) from exc
+    except OSError as exc:
+        raise ProfileError(f"could not write {SERVICE_PATH}: {exc}") from exc
+    _systemctl("daemon-reload")
+    _systemctl("enable", "--now", SERVICE_NAME)
+    return SERVICE_PATH
+
+
+def autostart_disable() -> None:
+    if not SERVICE_PATH.exists():
+        return
+    _systemctl("disable", "--now", SERVICE_NAME, check=False)
+    try:
+        SERVICE_PATH.unlink()
+    except OSError as exc:
+        raise ProfileError(f"could not remove {SERVICE_PATH}: {exc}") from exc
+    _systemctl("daemon-reload")
+
+
+def autostart_status() -> dict[str, str]:
+    if not SERVICE_PATH.exists():
+        return {"installed": "no", "profile": "-", "enabled": "-", "active": "-"}
+    profile = "-"
+    for line in SERVICE_PATH.read_text().splitlines():
+        if line.startswith("Description=Apply AMD GPU OC profile "):
+            profile = line.split("profile ", 1)[1].split(" (amdoc)", 1)[0]
+    return {
+        "installed": "yes",
+        "profile": profile,
+        "enabled": _systemctl("is-enabled", SERVICE_NAME, check=False),
+        "active": _systemctl("is-active", SERVICE_NAME, check=False),
+    }

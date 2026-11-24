@@ -45,7 +45,7 @@ src/amdoc/
   output.py     JSON/CSV/text renderers
   od.py         overdrive file parse/edit (pure logic, fully unit-tested)
   control.py    apply/reset overdrive + verification; fan curve; power; DPM pin
-  profiles.py   JSON save/apply/validate of every tunable (atomic write)
+  profiles.py   JSON save/apply/validate of every tunable + systemd boot autostart
   monitor.py    sampling loop → console table or CSV file
   doctor.py     health check + exact remediation for missing overdrive
   cli.py        argparse subcommands; `main()` returns int, prints user text only
